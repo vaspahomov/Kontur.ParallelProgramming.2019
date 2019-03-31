@@ -9,7 +9,7 @@ namespace ClusterServer
 	{
 		private static readonly ILog Log = LogManager.GetLogger(typeof(HttpListenerExtensions));
 
-		public async static Task StartProcessingRequestsAsync(this HttpListener listener, Func<HttpListenerContext, Task> callbackAsync)
+		public static async Task StartProcessingRequestsAsync(this HttpListener listener, Func<HttpListenerContext, Task> callbackAsync)
 		{
 			listener.Start();
 

@@ -204,7 +204,7 @@ namespace Cancellation
             }
         }
 
-        [Test, Ignore]
+        [Test]
         //CancellationTokenRegistration.Dispose
         public void CancellationDeadlock()
         {
