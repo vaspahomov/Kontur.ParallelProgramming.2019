@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NMAP", "NMAP\NMAP.csproj", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClusterServer", "ClusterServer\ClusterServer.csproj", "{44FB319B-2CEC-42D7-A393-0868F8873F23}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClusterClient", "ClusterClient\ClusterClient.csproj", "{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{44FB319B-2CEC-42D7-A393-0868F8873F23}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{44FB319B-2CEC-42D7-A393-0868F8873F23}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{44FB319B-2CEC-42D7-A393-0868F8873F23}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
