@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Threading.Tasks;
 using log4net;
 
@@ -20,7 +21,6 @@ namespace ClusterClient.Clients
             var webRequest = CreateRequest(uri + "?query=" + query);
             
             Log.InfoFormat("Processing {0}", webRequest.RequestUri);
-
             var resultTask = ProcessRequestAsync(webRequest);
             await Task.WhenAny(resultTask, Task.Delay(timeout));
             if (!resultTask.IsCompleted)
@@ -29,9 +29,6 @@ namespace ClusterClient.Clients
             return resultTask.Result;
         }
 
-        protected override ILog Log
-        {
-            get { return LogManager.GetLogger(typeof(RandomClusterClient)); }
-        }
+        protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
     }
 }
