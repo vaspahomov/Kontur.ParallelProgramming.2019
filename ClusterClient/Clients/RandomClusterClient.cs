@@ -17,16 +17,25 @@ namespace ClusterClient.Clients
 
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
         {
-            var uri = ReplicaAddresses[random.Next(ReplicaAddresses.Length)];
-            var webRequest = CreateRequest(uri + "?query=" + query);
-            
-            Log.InfoFormat("Processing {0}", webRequest.RequestUri);
-            var resultTask = ProcessRequestAsync(webRequest);
-            await Task.WhenAny(resultTask, Task.Delay(timeout));
-            if (!resultTask.IsCompleted)
-                throw new TimeoutException();
+            try
+            {
+                var uri = ReplicaAddresses[random.Next(ReplicaAddresses.Length)];
+                var webRequest = CreateRequest(uri + "?query=" + query);
+                
+                Log.InfoFormat("Processing {0}", webRequest.RequestUri);
+                var resultTask = ProcessRequestAsync(webRequest);
+                await Task.WhenAny(resultTask, Task.Delay(timeout));
+                if (!resultTask.IsCompleted)
+                    throw new TimeoutException();
 
-            return resultTask.Result;
+                return resultTask.Result;
+
+            }
+            catch (Exception e)
+            {
+                Log.Error(e);
+                throw new TimeoutException();
+            }
         }
 
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));

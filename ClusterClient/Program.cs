@@ -25,6 +25,8 @@ namespace ClusterClient
             {
                 var clients = new ClusterClientBase[]
                 {
+                    new RoundRobinClusterClient(replicaAddresses),
+                    new SmartRoundRobinClusterClient(replicaAddresses),
                     new ParallelOnAllClusterClient(replicaAddresses), 
                     new RandomClusterClient(replicaAddresses),
                 };
@@ -43,7 +45,7 @@ namespace ClusterClient
                             var timer = Stopwatch.StartNew();
                             try
                             {
-                                await client.ProcessRequestAsync(query, TimeSpan.FromSeconds(6));
+                                await client.ProcessRequestAsync(query, TimeSpan.FromSeconds(3));
 
                                 Console.WriteLine("Processed query \"{0}\" in {1} ms", query,
                                     timer.ElapsedMilliseconds);
