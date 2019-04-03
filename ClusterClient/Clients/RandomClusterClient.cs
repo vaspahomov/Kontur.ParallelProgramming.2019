@@ -29,11 +29,9 @@ namespace ClusterClient.Clients
                     throw new TimeoutException();
 
                 return resultTask.Result;
-
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Log.Error(e);
                 throw new TimeoutException();
             }
         }

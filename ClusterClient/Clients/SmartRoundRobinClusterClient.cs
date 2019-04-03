@@ -15,7 +15,27 @@ namespace ClusterClient.Clients
             : base(replicaAddresses)
         {
         }
-
+        
+        private static async Task<(bool Success, T Value)> GetFirstSuccessfulTask<T>(IReadOnlyCollection<Task<T>> tasks, TimeSpan timeout)
+        {
+            var tcs = new TaskCompletionSource<T>();
+            var remainingTasks = tasks.Count;
+            var sw = new Stopwatch();
+            sw.Start();
+            foreach (var task in tasks)
+                task.ContinueWith(t =>
+                {
+                    if (task.Status == TaskStatus.RanToCompletion)
+                        tcs.TrySetResult(t.Result);
+                    if (sw.Elapsed > timeout)
+                        tcs.SetException(new TimeoutException());
+                    else if (Interlocked.Decrement(ref remainingTasks) == 0)
+                        tcs.SetException(new AggregateException(
+                            tasks.SelectMany(t2 => t2.Exception?.InnerExceptions ?? Enumerable.Empty<Exception>())));
+                });
+            
+            return (tcs.Task.Status == TaskStatus.RanToCompletion, await tcs.Task);
+        }
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
         
         private async Task<(bool, string)> ProcessSingleRequestAsync(string url, TimeSpan timeout)
@@ -30,17 +50,11 @@ namespace ClusterClient.Clients
             {
                 return (false, default);
             }
-            
-//            await Task.WhenAny(
-//                resultTask,
-//                Task.Delay(
-//                    (int)timeout.TotalMilliseconds/ReplicaAddresses.Length ));
-            
         }
 
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
         {
-            var tasks = new ConcurrentBag<Task<(bool, string)>>();
+            var tasks = new ConcurrentBag<Task<(bool Success, string Value)>>();
             foreach (var uri in ReplicaAddresses.Shuffle())
             {
                 tasks.Add(ProcessSingleRequestAsync(
@@ -49,22 +63,17 @@ namespace ClusterClient.Clients
                 await Task.WhenAny(
                     Task.WhenAny(tasks), 
                     Task.Delay((int)timeout.TotalMilliseconds / ReplicaAddresses.Length));
-
-                foreach (var task in tasks)
+                
+                
+                foreach (var task in tasks.Shuffle())
                 {
-                    switch (task.Status)
-                    {
-                        case TaskStatus.RanToCompletion:
-                        {
-                            if (task.Result.Item1)
-                                return task.Result.Item2;
-                            break;
-                        }
-                        case TaskStatus.Faulted:
-                        case TaskStatus.Canceled:
-                            break;
-                    }
+                    if (task.Status != TaskStatus.RanToCompletion) continue;
+                    if (!task.Result.Success) continue;
+                        return task.Result.Value;
                 }
+                tasks = new ConcurrentBag<Task<(bool Success, string Value)>>(
+                    tasks.Where(x=>x.Status != TaskStatus.Faulted ||
+                                   x.Status != TaskStatus.Canceled)); 
             }
             
             throw new TimeoutException();
