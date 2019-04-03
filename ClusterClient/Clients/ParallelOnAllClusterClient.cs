@@ -17,7 +17,7 @@ namespace ClusterClient.Clients
 
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
 
-        private static Task<T> GetFirstSuccessfulTask<T>(IReadOnlyCollection<Task<T>> tasks, TimeSpan timeout)
+        private static async Task<(bool, T)> GetFirstSuccessfulTask<T>(IReadOnlyCollection<Task<T>> tasks, TimeSpan timeout)
         {
             var tcs = new TaskCompletionSource<T>();
             var remainingTasks = tasks.Count;
@@ -35,7 +35,7 @@ namespace ClusterClient.Clients
                             tasks.SelectMany(t2 => t2.Exception?.InnerExceptions ?? Enumerable.Empty<Exception>())));
                 });
             
-            return tcs.Task;
+            return (tcs.Task.Status == TaskStatus.RanToCompletion, await tcs.Task);
         }
 
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
@@ -53,7 +53,10 @@ namespace ClusterClient.Clients
 
             try
             {
-                return await GetFirstSuccessfulTask(resultTasks, timeout);
+                var (item1, item2) = await GetFirstSuccessfulTask(resultTasks, timeout);
+                if (item1)
+                    return item2;
+                throw new TimeoutException();
             }
             catch (Exception e)
             {
