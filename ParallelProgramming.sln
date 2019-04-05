@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClusterServer", "ClusterSer
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClusterClient", "ClusterClient\ClusterClient.csproj", "{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClusterTests", "ClusterTests\ClusterTests.csproj", "{8552D6AF-A842-49E4-9644-99130B4054DB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2CA4902C-1FDB-48E2-B8BF-7CF33D3D8433}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8552D6AF-A842-49E4-9644-99130B4054DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8552D6AF-A842-49E4-9644-99130B4054DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8552D6AF-A842-49E4-9644-99130B4054DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8552D6AF-A842-49E4-9644-99130B4054DB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
