@@ -28,8 +28,9 @@ namespace ClusterClient.Clients
                 {
                     if (task.Status == TaskStatus.RanToCompletion)
                         tcs.TrySetResult(t.Result);
-                    if (sw.Elapsed > timeout)
-                        tcs.SetException(new TimeoutException());
+                    else if (sw.Elapsed > timeout)
+                        throw new TimeoutException();
+//                        tcs.SetException(new TimeoutException());
                     else if (Interlocked.Decrement(ref remainingTasks) == 0)
                         tcs.SetException(new AggregateException(
                             tasks.SelectMany(t2 => t2.Exception?.InnerExceptions ?? Enumerable.Empty<Exception>())));
@@ -53,8 +54,14 @@ namespace ClusterClient.Clients
 
             try
             {
-                var value = await GetFirstSuccessfulTask(resultTasks, timeout);
-                return value;
+                Task.WhenAny(resultTasks)
+                    .Wait(TimeSpan.FromMilliseconds((int) timeout.TotalMilliseconds / ReplicaAddresses.Length));
+                foreach (var tuple in resultTasks)
+                {
+                    if (tuple.IsCompleted && tuple.Status == TaskStatus.RanToCompletion)
+                        return tuple.Result;
+                }
+                throw new TimeoutException();
             }
             catch (Exception e)
             {

@@ -14,12 +14,13 @@ namespace ClusterClient.Clients
         public SmartRoundRobinClusterClient (string[] replicaAddresses)
             : base(replicaAddresses)
         {
+            sw = Stopwatch.StartNew();
         }
         
-        private static async Task<(bool Success, T Value)> GetFirstSuccessfulTask<T>(IReadOnlyCollection<Task<T>> tasks, TimeSpan timeout)
+        private static async Task<T> GetFirstSuccessfulTask<T>(IEnumerable<Task<T>> tasks, int timeout)
         {
             var tcs = new TaskCompletionSource<T>();
-            var remainingTasks = tasks.Count;
+            var remainingTasks = tasks.Count();
             var sw = new Stopwatch();
             sw.Start();
             foreach (var task in tasks)
@@ -27,70 +28,72 @@ namespace ClusterClient.Clients
                 {
                     if (task.Status == TaskStatus.RanToCompletion)
                         tcs.TrySetResult(t.Result);
-                    if (sw.Elapsed > timeout)
-                        tcs.SetException(new TimeoutException());
+//                    if (sw.Elapsed.TotalMilliseconds > timeout)
+//                        tcs.SetException(new TimeoutException());
                     else if (Interlocked.Decrement(ref remainingTasks) == 0)
                         tcs.SetException(new AggregateException(
                             tasks.SelectMany(t2 => t2.Exception?.InnerExceptions ?? Enumerable.Empty<Exception>())));
                 });
             
-            return (tcs.Task.Status == TaskStatus.RanToCompletion, await tcs.Task);
+            return tcs.Task.Result;
         }
+
+        private Stopwatch sw;
         
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
         
-        private async Task<(bool, string)> ProcessSingleRequestAsync(string url, TimeSpan timeout)
+        private (bool, Task<string>) ProcessSingleRequestAsync(string url, TimeSpan timeout)
         {
             try
             {
                 var webRequest = CreateRequest(url);
                 Log.InfoFormat("Processing {0}", webRequest.RequestUri);
-                return (true, await ProcessRequestAsync(webRequest));
+                return (true, ProcessRequestAsync(webRequest));
             }
             catch (Exception e)
             {
                 return (false, default);
             }
         }
+        
 
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
         {
-            var tasks = new ConcurrentBag<Task<(bool Success, string Value)>>();
-            var failedTasks = new ConcurrentBag<Task<(bool Success, string Value)>>();
+            var tasks = new ConcurrentBag<(bool Success, Task<string> Value)>();
             
             var replicas = ReplicaAddresses
                 .Except(UriStatistics.Keys)
                 .Concat(UriStatistics
                     .OrderByDescending(x => x.Value)
-                    .Select(x => x.Key));
+                    .Select(x => x.Key))
+                .ToList();
             
-            foreach (var uri in replicas)
+            try
             {
-                tasks.Add(ProcessSingleRequestAsync(
-                    uri + "?query=" + query, timeout));
-                
-                await Task.WhenAny(
-                    Task.WhenAny(tasks), 
-                    Task.Delay((int)timeout.TotalMilliseconds / ReplicaAddresses.Length));
-                
-                
-                foreach (var task in tasks.Except(failedTasks))
+                foreach (var uri in replicas)
                 {
-                    if (task.Status == TaskStatus.Canceled || 
-                        task.Status == TaskStatus.Faulted)
+                    tasks.Add(ProcessSingleRequestAsync(
+                        uri + "?query=" + query, timeout));
+
+                    var task = Task.WhenAny(tasks.Select(x => (Task) x.Value))
+                        .Wait(TimeSpan.FromMilliseconds((int) timeout.TotalMilliseconds / replicas.Count));
+                    
+                    if (task)
                     {
-                        failedTasks.Add(task);
-                        continue;
+                        foreach (var tuple in tasks)
+                        {
+                            if (tuple.Value.IsCompleted && tuple.Value.Status == TaskStatus.RanToCompletion)
+                                return tuple.Value.Result;
+                        }
                     }
-                    if (!task.Result.Success) continue;
-                        return task.Result.Value;
+                    if (sw.Elapsed > timeout)
+                        throw new NotImplementedException();
                 }
-                
-                tasks = new ConcurrentBag<Task<(bool Success, string Value)>>(
-                    tasks.Where(x=>x.Status != TaskStatus.Faulted ||
-                                   x.Status != TaskStatus.Canceled)); 
             }
-            
+            catch (Exception)
+            {
+            }
+
             throw new TimeoutException();
         }
     }

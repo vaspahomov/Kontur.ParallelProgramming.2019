@@ -3,7 +3,7 @@ using Fclp;
 
 namespace ClusterServer
 {
-    internal class ServerArguments
+    class ServerArguments
     {
         public int Port { get; set; }
         public string MethodName { get; set; }
