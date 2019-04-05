@@ -20,32 +20,35 @@ namespace Cluster
 
 				try
 				{
-					var context = await listener.GetContextAsync();
+					if(!listener.IsListening)
+						return;
 
+					var context = await listener.GetContextAsync();
 					Task.Run(
 						async () =>
-								{
-									var ctx = context;
-									try
-									{
-										await callbackAsync(ctx);
-									}
-									catch (Exception e)
-									{
-										Console.WriteLine(e);
-									}
-									finally
-									{
-										ctx.Response.Close();
-									}
-								}
-						);
+						{
+							var ctx = context;
+							try
+							{
+								await callbackAsync(ctx);
+							}
+							catch(Exception e)
+							{
+								Log.Error(e);
+							}
+							finally
+							{
+								ctx.Response.Close();
+							}
+						}
+					);
 				}
-				catch (Exception e)
+				catch(Exception e)
 				{
 					Log.Error(e);
 				}
 			}
+			
 		}
 
 		public static void StartProcessingRequestsSync(this HttpListener listener, Action<HttpListenerContext> callbackSync)
@@ -56,8 +59,8 @@ namespace Cluster
 			{
 				try
 				{
-                if (!listener.IsListening)
-                    return;
+					if(!listener.IsListening)
+						return;
 
 					var context = listener.GetContext();
 
