@@ -56,6 +56,7 @@ namespace ClusterClient.Clients
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
         {
             var tasks = new ConcurrentBag<Task<(bool Success, string Value)>>();
+            var failedTasks = new ConcurrentBag<Task<(bool Success, string Value)>>();
             
             var replicas = ReplicaAddresses
                 .Except(UriStatistics.Keys)
@@ -73,12 +74,18 @@ namespace ClusterClient.Clients
                     Task.Delay((int)timeout.TotalMilliseconds / ReplicaAddresses.Length));
                 
                 
-                foreach (var task in tasks.Shuffle())
+                foreach (var task in tasks.Except(failedTasks))
                 {
-                    if (task.Status != TaskStatus.RanToCompletion) continue;
+                    if (task.Status == TaskStatus.Canceled || 
+                        task.Status == TaskStatus.Faulted)
+                    {
+                        failedTasks.Add(task);
+                        continue;
+                    }
                     if (!task.Result.Success) continue;
                         return task.Result.Value;
                 }
+                
                 tasks = new ConcurrentBag<Task<(bool Success, string Value)>>(
                     tasks.Where(x=>x.Status != TaskStatus.Faulted ||
                                    x.Status != TaskStatus.Canceled)); 
