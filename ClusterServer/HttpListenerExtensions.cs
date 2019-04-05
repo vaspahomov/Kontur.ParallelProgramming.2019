@@ -15,6 +15,9 @@ namespace Cluster
 
 			while (true)
 			{
+                if (!listener.IsListening)
+                    return;
+
 				try
 				{
 					if(!listener.IsListening)

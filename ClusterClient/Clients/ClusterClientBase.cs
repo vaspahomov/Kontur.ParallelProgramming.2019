@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -10,15 +12,16 @@ namespace ClusterClient.Clients
 {
     public abstract class ClusterClientBase
     {
-        protected string[] ReplicaAddresses { get; set; }
-
         protected ClusterClientBase(string[] replicaAddresses)
         {
             ReplicaAddresses = replicaAddresses;
         }
+        protected readonly ConcurrentDictionary<string, TimeSpan> UriStatistics
+            = new ConcurrentDictionary<string, TimeSpan>();
+        protected string[] ReplicaAddresses { get; set; }
+        protected abstract ILog Log { get; }
 
         public abstract Task<string> ProcessRequestAsync(string query, TimeSpan timeout);
-        protected abstract ILog Log { get; }
 
         protected static HttpWebRequest CreateRequest(string uriStr)
         {
@@ -33,10 +36,11 @@ namespace ClusterClient.Clients
         protected async Task<string> ProcessRequestAsync(WebRequest request)
         {
             var timer = Stopwatch.StartNew();
+            
             using (var response = await request.GetResponseAsync())
             {
-                var result = await new StreamReader(response.GetResponseStream(), Encoding.UTF8).ReadToEndAsync();
-                Log.InfoFormat("Response from {0} received in {1} ms", request.RequestUri, timer.ElapsedMilliseconds);
+                var result = await new StreamReader(response?.GetResponseStream(), Encoding.UTF8).ReadToEndAsync();
+                Log.InfoFormat($"Response from {request.RequestUri} received in {timer.ElapsedMilliseconds} ms");
                 return result;
             }
         }
