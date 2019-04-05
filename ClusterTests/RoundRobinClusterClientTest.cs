@@ -10,7 +10,7 @@ namespace ClusterTests
 	{
 		protected override ClusterClientBase CreateClient(string[] replicaAddresses)
 		{
-			throw new NotImplementedException();
+			return new RoundRobinClusterClient(replicaAddresses);
 		}
 
 		[Test]
@@ -32,7 +32,7 @@ namespace ClusterTests
 
 			var sw = Stopwatch.StartNew();
 			Assert.Throws<TimeoutException>(() => ProcessRequests(Timeout));
-			sw.Elapsed.Should().BeCloseTo(TimeSpan.FromMilliseconds(Timeout), TimeSpan.FromSeconds(1));
+			sw.Elapsed.Should().BeCloseTo(TimeSpan.FromMilliseconds(Timeout), TimeSpan.FromSeconds(2));
 		}
 
 		[Test]

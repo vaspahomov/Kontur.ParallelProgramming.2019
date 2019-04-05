@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using log4net;
 using NUnit.Framework;
+using NUnit.Framework.Internal;
 
 namespace ClusterTests
 {

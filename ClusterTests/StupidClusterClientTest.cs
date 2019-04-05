@@ -9,7 +9,7 @@ namespace ClusterTests
 	{
 		protected override ClusterClientBase CreateClient(string[] replicaAddresses)
 		{
-			throw new NotImplementedException();
+			return new ParallelOnAllClusterClient(replicaAddresses);
 		}
 
 		private const int Fast = 1000;

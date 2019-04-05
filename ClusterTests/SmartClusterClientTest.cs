@@ -10,7 +10,7 @@ namespace ClusterTests
 	{
 		protected override ClusterClientBase CreateClient(string[] replicaAddresses)
 		{
-			throw new NotImplementedException();
+			return new SmartRoundRobinClusterClient(replicaAddresses);
 		}
 
 		[Test]
