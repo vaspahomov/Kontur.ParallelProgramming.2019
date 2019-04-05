@@ -49,10 +49,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ClusterHelpers.cs" />
+    <Compile Include="ClusterServer.cs" />
     <Compile Include="HttpListenerExtensions.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="ServerArguments.cs" />
+    <Compile Include="ServerOptions.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
