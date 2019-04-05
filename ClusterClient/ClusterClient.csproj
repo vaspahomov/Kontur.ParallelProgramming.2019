@@ -50,6 +50,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Clients\RoundRobinWithLimitedReplicasClusterClient.cs" />
     <Compile Include="Clients\SmartRoundRobinClusterClient.cs" />
     <Compile Include="EnumerableExtensions.cs" />
     <Compile Include="Clients\ClusterClientBase.cs" />

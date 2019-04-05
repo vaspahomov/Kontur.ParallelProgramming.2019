@@ -36,6 +36,7 @@ namespace ClusterClient.Clients
             
             return (tcs.Task.Status == TaskStatus.RanToCompletion, await tcs.Task);
         }
+        
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
         
         private async Task<(bool, string)> ProcessSingleRequestAsync(string url, TimeSpan timeout)
@@ -55,7 +56,14 @@ namespace ClusterClient.Clients
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
         {
             var tasks = new ConcurrentBag<Task<(bool Success, string Value)>>();
-            foreach (var uri in ReplicaAddresses.Shuffle())
+            
+            var replicas = ReplicaAddresses
+                .Except(UriStatistics.Keys)
+                .Concat(UriStatistics
+                    .OrderByDescending(x => x.Value)
+                    .Select(x => x.Key));
+            
+            foreach (var uri in replicas)
             {
                 tasks.Add(ProcessSingleRequestAsync(
                     uri + "?query=" + query, timeout));

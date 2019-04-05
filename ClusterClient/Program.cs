@@ -25,6 +25,7 @@ namespace ClusterClient
             {
                 var clients = new ClusterClientBase[]
                 {
+                    new RoundRobinWithLimitedReplicasClusterClient(replicaAddresses),
                     new RoundRobinClusterClient(replicaAddresses),
                     new SmartRoundRobinClusterClient(replicaAddresses),
                     new ParallelOnAllClusterClient(replicaAddresses), 
@@ -35,7 +36,7 @@ namespace ClusterClient
                     "От", "топота", "копыт", "пыль", "по", "полю", "летит", "На", "дворе", "трава", "на", "траве",
                     "дрова"
                 };
-
+//                var queries = Enumerable.Range(1,500).Select(x=>x.ToString());
                 foreach (var client in clients)
                 {
                     Console.WriteLine("Testing {0} started", client.GetType());
@@ -45,7 +46,7 @@ namespace ClusterClient
                             var timer = Stopwatch.StartNew();
                             try
                             {
-                                await client.ProcessRequestAsync(query, TimeSpan.FromSeconds(3));
+                                await client.ProcessRequestAsync(query, TimeSpan.FromSeconds(10));
 
                                 Console.WriteLine("Processed query \"{0}\" in {1} ms", query,
                                     timer.ElapsedMilliseconds);

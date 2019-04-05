@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -14,7 +16,8 @@ namespace ClusterClient.Clients
         {
             ReplicaAddresses = replicaAddresses;
         }
-
+        protected readonly ConcurrentDictionary<string, TimeSpan> UriStatistics
+            = new ConcurrentDictionary<string, TimeSpan>();
         protected string[] ReplicaAddresses { get; set; }
         protected abstract ILog Log { get; }
 

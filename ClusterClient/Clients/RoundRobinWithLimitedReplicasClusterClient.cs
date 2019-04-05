@@ -7,16 +7,16 @@ using log4net;
 
 namespace ClusterClient.Clients
 {
-    public class RoundRobinClusterClient : ClusterClientBase
+    public class RoundRobinWithLimitedReplicasClusterClient : ClusterClientBase
     {
-        public RoundRobinClusterClient(string[] replicaAddresses)
+        public RoundRobinWithLimitedReplicasClusterClient(string[] replicaAddresses)
             : base(replicaAddresses)
         {
         }
 
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
 
-        private async Task<(bool Success, string Value)> ProcessSingleRequestAsync(string url, TimeSpan timeout)
+        private async Task<(bool Success, string Value)> ProcessSingleRequestAsync(string url, int timeout)
         {
             try
             {
@@ -25,7 +25,7 @@ namespace ClusterClient.Clients
                 var resultTask = ProcessRequestAsync(webRequest);
                 await Task.WhenAny(
                     resultTask,
-                    Task.Delay((int) timeout.TotalMilliseconds / ReplicaAddresses.Length));
+                    Task.Delay(timeout));
                 return !resultTask.IsCompleted ? (false, default) : (true, resultTask.Result);
             }
             catch (Exception)
@@ -34,22 +34,43 @@ namespace ClusterClient.Clients
             }
         }
 
+        private List<string> GetReplicasToExecute(int count = 10)
+        {
+            var replicas = new List<string>();
+
+            if (UriStatistics.Count > 4 * count / 5)
+            {
+                var bestReplicas = UriStatistics
+                    .OrderByDescending(x => x.Value)
+                    .Take(count / 2)
+                    .Select(x => x.Key);
+                replicas = replicas
+                    .Concat(bestReplicas)
+                    .ToList();
+            }
+
+            return replicas
+                .Concat(ReplicaAddresses
+                    .Shuffle()
+                    .Take(count - replicas.Count))
+                .Shuffle()
+                .ToList();
+        }
+
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
         {
-            var replicas = ReplicaAddresses
-                .Except(UriStatistics.Keys)
-                .Concat(UriStatistics
-                    .OrderByDescending(x => x.Value)
-                    .Select(x => x.Key));
-            
+            var replicas = GetReplicasToExecute();
             foreach (var uri in replicas)
             {
                 var sw = new Stopwatch();
+
                 sw.Start();
                 var (successes, value) = await ProcessSingleRequestAsync(
-                    uri + "?query=" + query, timeout);
+                    uri + "?query=" + query, 
+                    (int) timeout.TotalMilliseconds / replicas.Count);
                 UriStatistics[uri] = sw.Elapsed;
                 sw.Stop();
+
                 if (successes)
                     return value;
             }
