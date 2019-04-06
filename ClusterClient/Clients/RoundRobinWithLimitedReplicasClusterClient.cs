@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using log4net;
 
@@ -9,6 +11,7 @@ namespace ClusterClient.Clients
 {
     public class RoundRobinWithLimitedReplicasClusterClient : ClusterClientBase
     {
+        private int requestCounter;
         public RoundRobinWithLimitedReplicasClusterClient(string[] replicaAddresses)
             : base(replicaAddresses)
         {
@@ -16,24 +19,27 @@ namespace ClusterClient.Clients
 
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
 
-        private async Task<(bool Success, string Value)> ProcessSingleRequestAsync(string url, int timeout)
+        private (Task<string> Value, int Id) ProcessSingleRequestAsync(string url)
         {
-            try
-            {
                 var webRequest = CreateRequest(url);
                 Log.InfoFormat("Processing {0}", webRequest.RequestUri);
-                var resultTask = ProcessRequestAsync(webRequest);
-                await Task.WhenAny(
-                    resultTask,
-                    Task.Delay(timeout));
-                return !resultTask.IsCompleted ? (false, default) : (true, resultTask.Result);
-            }
-            catch (Exception)
-            {
-                return (false, default);
-            }
+                
+                webRequest.Headers["Id"] = requestCounter.ToString();
+                requestCounter++;
+                
+                return (ProcessRequestAsync(webRequest), requestCounter);
         }
-
+        private async Task KillSingleRequestAsync(string url, int id)
+        {
+                var webRequest = CreateRequest(url);
+                Log.InfoFormat("Processing {0}", webRequest.RequestUri);
+                
+                webRequest.Headers["Id"] = id.ToString();
+                webRequest.Headers["kill"] = "true";
+                
+                await ProcessRequestAsync(webRequest);
+        }
+        
         private List<string> GetReplicasToExecute(int count = 10)
         {
             var replicas = new List<string>();
@@ -60,19 +66,39 @@ namespace ClusterClient.Clients
         public override async Task<string> ProcessRequestAsync(string query, TimeSpan timeout)
         {
             var replicas = GetReplicasToExecute();
-            foreach (var uri in replicas)
+            
+            var tasks = new ConcurrentBag<((Task<string> Value, int Id) Task, string Uri, Stopwatch Sw)>();
+
+            
+            foreach (var uri in replicas.Shuffle())
             {
-                var sw = new Stopwatch();
+                var sw = Stopwatch.StartNew();
+                tasks.Add((ProcessSingleRequestAsync(
+                    uri + "?query=" + query),
+                    uri,
+                    sw));
+                
+                await Task.WhenAny(Task.WhenAny(tasks.Select(x => x.Task.Value)),
+                    Task.Delay(TimeSpan.FromMilliseconds(timeout.TotalMilliseconds / replicas.Count / 2)));
+                
+                foreach (var ((task, _), l_uri, _) in tasks)
+                    if (task.IsCompleted && task.Status == TaskStatus.RanToCompletion)
+                    {
+                        UriStatistics[l_uri] = sw.Elapsed;
+                        sw.Stop();
 
-                sw.Start();
-                var (successes, value) = await ProcessSingleRequestAsync(
-                    uri + "?query=" + query, 
-                    (int) timeout.TotalMilliseconds / replicas.Count);
-                UriStatistics[uri] = sw.Elapsed;
-                sw.Stop();
-
-                if (successes)
-                    return value;
+                        foreach (var _task in tasks)
+                        {
+                            KillSingleRequestAsync(_task.Uri, _task.Task.Id);
+                        }
+                        
+                        return await task;
+                    }
+            }
+            
+            foreach (var _task in tasks)
+            {
+                KillSingleRequestAsync(_task.Uri, _task.Task.Id);
             }
 
             throw new TimeoutException();

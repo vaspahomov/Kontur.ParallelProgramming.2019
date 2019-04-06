@@ -32,6 +32,7 @@ namespace ClusterTests
 
 			var sw = Stopwatch.StartNew();
 			Assert.Throws<TimeoutException>(() => ProcessRequests(Timeout));
+			Console.WriteLine(sw.Elapsed.TotalMilliseconds);
 			sw.Elapsed.Should().BeCloseTo(TimeSpan.FromMilliseconds(Timeout), TimeSpan.FromSeconds(2));
 		}
 

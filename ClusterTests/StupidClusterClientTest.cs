@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using ClusterClient.Clients;
 using NUnit.Framework;
@@ -30,7 +31,6 @@ namespace ClusterTests
 		{
 			for (int i = 0; i < 4; i++)
 				CreateServer(Fast);
-
 			ProcessRequests(Fast + 100);
 		}
 	}

@@ -25,7 +25,7 @@ namespace ClusterClient.Clients
                 var resultTask = ProcessRequestAsync(webRequest);
                 await Task.WhenAny(
                     resultTask,
-                    Task.Delay((int) timeout.TotalMilliseconds / ReplicaAddresses.Length));
+                    Task.Delay((int) timeout.TotalMilliseconds / ReplicaAddresses.Length / 2));
                 return !resultTask.IsCompleted ? (false, default) : (true, resultTask.Result);
             }
             catch (Exception)
@@ -44,8 +44,8 @@ namespace ClusterClient.Clients
             
             foreach (var uri in replicas)
             {
-                var sw = new Stopwatch();
-                sw.Start();
+                var sw = Stopwatch.StartNew();
+                
                 var (successes, value) = await ProcessSingleRequestAsync(
                     uri + "?query=" + query, timeout);
                 UriStatistics[uri] = sw.Elapsed;

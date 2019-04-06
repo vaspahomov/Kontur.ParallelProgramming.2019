@@ -16,6 +16,7 @@ namespace ClusterClient.Clients
         {
             ReplicaAddresses = replicaAddresses;
         }
+        
         protected readonly ConcurrentDictionary<string, TimeSpan> UriStatistics
             = new ConcurrentDictionary<string, TimeSpan>();
         protected string[] ReplicaAddresses { get; set; }
@@ -24,6 +25,16 @@ namespace ClusterClient.Clients
         public abstract Task<string> ProcessRequestAsync(string query, TimeSpan timeout);
 
         protected static HttpWebRequest CreateRequest(string uriStr)
+        {
+            var request = WebRequest.CreateHttp(Uri.EscapeUriString(uriStr));
+            request.Proxy = null;
+            request.KeepAlive = true;
+            request.ServicePoint.UseNagleAlgorithm = false;
+            request.ServicePoint.ConnectionLimit = 100500;
+            return request;
+        }
+        
+        protected static HttpWebRequest CreateRequestt(string uriStr)
         {
             var request = WebRequest.CreateHttp(Uri.EscapeUriString(uriStr));
             request.Proxy = null;

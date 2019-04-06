@@ -25,13 +25,13 @@ namespace ClusterClient
             {
                 var clients = new ClusterClientBase[]
                 {
-//                    new RoundRobinWithLimitedReplicasClusterClient(replicaAddresses),
+                    new RoundRobinWithLimitedReplicasClusterClient(replicaAddresses),
 //                    new RoundRobinClusterClient(replicaAddresses),
-                    new SmartRoundRobinClusterClient(replicaAddresses),
+//                    new SmartRoundRobinClusterClient(replicaAddresses),
 //                    new ParallelOnAllClusterClient(replicaAddresses), 
 //                    new RandomClusterClient(replicaAddresses),
                 };
-                var queries = new[]
+                var queries = new[]    
                 {
                     "От", "топота", "копыт", "пыль", "по", "полю", "летит", "На", "дворе", "трава", "на", "траве",
                     "дрова"
@@ -61,7 +61,7 @@ namespace ClusterClient
             }
             catch (Exception e)
             {
-//                Console.WriteLine(e);
+                Console.WriteLine(e);
                 Log.Fatal(e);
             }
         }
