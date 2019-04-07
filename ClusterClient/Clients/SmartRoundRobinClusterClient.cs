@@ -27,7 +27,7 @@ namespace ClusterClient.Clients
                 Log.InfoFormat("Processing {0}", webRequest.RequestUri);
                 return (true, ProcessRequestAsync(webRequest));
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return (false, default);
             }

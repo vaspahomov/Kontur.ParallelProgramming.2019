@@ -44,17 +44,20 @@ namespace ClusterClient.Clients
             const double coefficient = (double) 4 / 5;
             if (UriStatistics.Count <= coefficient * count)
                 return ReplicaAddresses
+                    .Except(UrisGrayList.Keys)
                     .Shuffle()
                     .Take(count)
                     .Shuffle()
                     .ToList();
 
+
             var bestReplicas = UriStatistics
                 .OrderByDescending(x => x.Value)
-                .Take((int) (coefficient * count))
                 .Select(x => x.Key)
+                .Except(UrisGrayList.Keys)
+                .Take((int) (coefficient * count))
                 .ToList();
-
+            
             return bestReplicas
                 .Concat(ReplicaAddresses
                     .Shuffle()
@@ -72,8 +75,11 @@ namespace ClusterClient.Clients
             var uris = new ConcurrentDictionary<Guid, string>();
 
             var singleTimeout = TimeSpan.FromMilliseconds(timeout.TotalMilliseconds / replicas.Count);
-            foreach (var uri in replicas.Shuffle())
+            
+            foreach (var uri in replicas)
             {
+//                DecrementAllInGrayList();
+                
                 var sw = Stopwatch.StartNew();
                 var (task, id) = GetExecutingTaskWithGuid(uri + "?query=" + query);
 
@@ -87,15 +93,41 @@ namespace ClusterClient.Clients
                     .Where(x => x.Value.IsCompleted && x.Value.Status == TaskStatus.RanToCompletion)
                     .ToList();
 
+//                UpdateGrayList(tasks, uris);
+
                 if (completedTasks.Count <= 0) continue;
 
                 WriteStatistics(timers, completedTasks, uris);
-                KillTasks(tasks, completedTasks, uris);
+                KillTasksOnServer(tasks, completedTasks, uris);
 
                 return await completedTasks.First().Value;
             }
 
             throw new TimeoutException();
+        }
+
+        private void DecrementAllInGrayList()
+        {
+            foreach (var uri in UrisGrayList.Keys)
+                UrisGrayList[uri]--;
+
+            UrisGrayList = new ConcurrentDictionary<string, int>(
+                UrisGrayList.Where(x => x.Value > 0));
+        }
+        
+        private void UpdateGrayList(
+            IEnumerable<KeyValuePair<Guid, Task<string>>> tasks,
+            IReadOnlyDictionary<Guid, string> uris)
+        {
+            tasks.Where(x => !x.Value.IsCompleted || x.Value.Status != TaskStatus.RanToCompletion)
+                    .ForEach(x =>
+                    {
+                        var uncompletedTaskId = x.Key;
+                        var uncompletedTaskUri = uris[uncompletedTaskId];
+                        if (!UrisGrayList.TryGetValue(uncompletedTaskUri, out _))
+                            UrisGrayList[uncompletedTaskUri] = 0;
+                        UrisGrayList[uncompletedTaskUri]++;
+                    });
         }
 
         private void WriteStatistics(
@@ -110,7 +142,7 @@ namespace ClusterClient.Clients
             });
         }
 
-        private void KillTasks(
+        private void KillTasksOnServer(
             IReadOnlyDictionary<Guid, Task<string>> tasks,
             IEnumerable<KeyValuePair<Guid, Task<string>>> completedTasks,
             IReadOnlyDictionary<Guid, string> uris)

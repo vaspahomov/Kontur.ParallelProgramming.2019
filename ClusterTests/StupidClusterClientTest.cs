@@ -13,7 +13,7 @@ namespace ClusterTests
 			return new ParallelOnAllClusterClient(replicaAddresses);
 		}
 
-		private const int Fast = 1000;
+		private new const int Fast = 1000;
 
 		[Test]
 		public void ClientShouldReturnSuccess_WhenOneReplicaIsGoodAndOthersAreBad()

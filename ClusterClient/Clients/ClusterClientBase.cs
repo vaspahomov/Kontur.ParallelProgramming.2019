@@ -13,6 +13,8 @@ namespace ClusterClient.Clients
     {
         protected readonly ConcurrentDictionary<string, TimeSpan> UriStatistics
             = new ConcurrentDictionary<string, TimeSpan>();
+        protected ConcurrentDictionary<string, int> UrisGrayList
+            = new ConcurrentDictionary<string, int>();
 
         protected ClusterClientBase(string[] replicaAddresses)
         {
