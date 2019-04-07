@@ -3,7 +3,7 @@ using Fclp;
 
 namespace Cluster
 {
-     public class ServerOptions
+    public class ServerOptions
     {
         public int Port { get; set; }
         public string MethodName { get; set; }

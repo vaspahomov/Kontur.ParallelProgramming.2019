@@ -31,10 +31,8 @@ namespace ClusterClient.Clients
             {
                 await Task.WhenAny(Task.WhenAny(resultTasks), Task.Delay(timeout));
                 foreach (var tuple in resultTasks)
-                {
                     if (tuple.IsCompleted && tuple.Status == TaskStatus.RanToCompletion)
                         return tuple.Result;
-                }
                 throw new TimeoutException();
             }
             catch (Exception e)

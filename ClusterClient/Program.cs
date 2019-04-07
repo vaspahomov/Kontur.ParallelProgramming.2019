@@ -26,17 +26,17 @@ namespace ClusterClient
                 var clients = new ClusterClientBase[]
                 {
                     new RoundRobinWithLimitedReplicasClusterClient(replicaAddresses),
-//                    new RoundRobinClusterClient(replicaAddresses),
-//                    new SmartRoundRobinClusterClient(replicaAddresses),
-//                    new ParallelOnAllClusterClient(replicaAddresses), 
-//                    new RandomClusterClient(replicaAddresses),
+                    new RoundRobinClusterClient(replicaAddresses),
+                    new SmartRoundRobinClusterClient(replicaAddresses),
+                    new ParallelOnAllClusterClient(replicaAddresses),
+                    new RandomClusterClient(replicaAddresses)
                 };
-                var queries = new[]    
+                var queries = new[]
                 {
                     "От", "топота", "копыт", "пыль", "по", "полю", "летит", "На", "дворе", "трава", "на", "траве",
                     "дрова"
                 };
-//                var queries = Enumerable.Range(1,500).Select(x=>x.ToString());
+//                var queries = Enumerable.Range(1,500).Select(x=>x.ToString()).ToArray();
                 foreach (var client in clients)
                 {
                     Console.WriteLine("Testing {0} started", client.GetType());

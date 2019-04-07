@@ -55,14 +55,13 @@ namespace ClusterClient.Clients
                     await Task.WhenAny(Task.WhenAny(tasks.Select(x => x.Value)),
                         Task.Delay(
                             TimeSpan.FromMilliseconds(timeout.TotalMilliseconds / replicas.Count / 2)));
-                    
+
                     foreach (var task in tasks)
                         if (task.Value.IsCompleted && task.Value.Status == TaskStatus.RanToCompletion)
                             return await task.Value;
-                    
+
                     if (sw.Elapsed > timeout)
                         throw new TimeoutException();
-                    
                 }
             }
             catch (Exception)

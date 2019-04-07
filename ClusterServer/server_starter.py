@@ -9,8 +9,8 @@ word = 'qqq'
 delay = 1000
 threads = []
 
-delays = [10, 100]
-for e in range(8060, 8080):
+delays = [10, 100, 200, 70]
+for e in range(8060, 8090):
     threads.append(
         threading.Thread(
             target=os.system,

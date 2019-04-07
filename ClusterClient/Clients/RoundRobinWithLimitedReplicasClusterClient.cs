@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Fclp.Internals.Extensions;
 using log4net;
 
 namespace ClusterClient.Clients
@@ -17,7 +18,7 @@ namespace ClusterClient.Clients
 
         protected override ILog Log => LogManager.GetLogger(typeof(RandomClusterClient));
 
-        private (Task<string> Value, Guid Id) ProcessSingleRequestAsync(string url)
+        private (Task<string> Task, Guid Id) GetExecutingTaskWithGuid(string url)
         {
             var webRequest = CreateRequest(url);
             Log.InfoFormat("Processing {0}", webRequest.RequestUri);
@@ -27,9 +28,9 @@ namespace ClusterClient.Clients
             return (ProcessRequestAsync(webRequest), id);
         }
 
-        private async Task KillSingleRequestAsync(string url, Guid id)
+        private async Task KillSingleRequestAsync(string uri, Guid id)
         {
-            var webRequest = CreateRequest(url);
+            var webRequest = CreateRequest(uri);
             Log.InfoFormat("Processing {0}", webRequest.RequestUri);
 
             webRequest.Headers["Id"] = id.ToString();
@@ -50,7 +51,7 @@ namespace ClusterClient.Clients
 
             var bestReplicas = UriStatistics
                 .OrderByDescending(x => x.Value)
-                .Take((int)(coefficient * count))
+                .Take((int) (coefficient * count))
                 .Select(x => x.Key)
                 .ToList();
 
@@ -66,37 +67,60 @@ namespace ClusterClient.Clients
         {
             var replicas = GetReplicasToExecute();
 
-            var tasks = new ConcurrentBag<((Task<string> Value, Guid Id) Task, string Uri, Stopwatch Sw)>();
+            var timers = new ConcurrentDictionary<Guid, Stopwatch>();
+            var tasks = new ConcurrentDictionary<Guid, Task<string>>();
+            var uris = new ConcurrentDictionary<Guid, string>();
 
-
+            var singleTimeout = TimeSpan.FromMilliseconds(timeout.TotalMilliseconds / replicas.Count);
             foreach (var uri in replicas.Shuffle())
             {
                 var sw = Stopwatch.StartNew();
-                tasks.Add((ProcessSingleRequestAsync(
-                        uri + "?query=" + query),
-                    uri,
-                    sw));
+                var (task, id) = GetExecutingTaskWithGuid(uri + "?query=" + query);
 
-                await Task.WhenAny(Task.WhenAny(tasks.Select(x => x.Task.Value)),
-                    Task.Delay(TimeSpan.FromMilliseconds(timeout.TotalMilliseconds / replicas.Count / 2)));
+                timers[id] = sw;
+                tasks[id] = task;
+                uris[id] = uri;
 
-                foreach (var ((task, _), l_uri, _) in tasks)
-                    if (task.IsCompleted && task.Status == TaskStatus.RanToCompletion)
-                    {
-                        UriStatistics[l_uri] = sw.Elapsed;
-                        sw.Stop();
+                await Task.WhenAny(Task.WhenAny(tasks.Values), Task.Delay(singleTimeout));
 
-                        foreach (var _task in tasks)
-                            KillSingleRequestAsync(_task.Uri, _task.Task.Id);
+                var completedTasks = tasks
+                    .Where(x => x.Value.IsCompleted && x.Value.Status == TaskStatus.RanToCompletion)
+                    .ToList();
 
-                        return await task;
-                    }
+                if (completedTasks.Count <= 0) continue;
+
+                WriteStatistics(timers, completedTasks, uris);
+                KillTasks(tasks, completedTasks, uris);
+
+                return await completedTasks.First().Value;
             }
 
-            foreach (var _task in tasks)
-                KillSingleRequestAsync(_task.Uri, _task.Task.Id);
-
             throw new TimeoutException();
+        }
+
+        private void WriteStatistics(
+            IReadOnlyDictionary<Guid, Stopwatch> timers,
+            IEnumerable<KeyValuePair<Guid, Task<string>>> completedTasks,
+            IReadOnlyDictionary<Guid, string> uris)
+        {
+            completedTasks.ForEach(x =>
+            {
+                var completedTaskId = x.Key;
+                UriStatistics[uris[completedTaskId]] = timers[completedTaskId].Elapsed;
+            });
+        }
+
+        private void KillTasks(
+            IReadOnlyDictionary<Guid, Task<string>> tasks,
+            IEnumerable<KeyValuePair<Guid, Task<string>>> completedTasks,
+            IReadOnlyDictionary<Guid, string> uris)
+        {
+            tasks.Except(completedTasks).ToList().ForEach(x =>
+            {
+                var completedTaskId = x.Key;
+                var completedTaskUri = uris[completedTaskId];
+                KillSingleRequestAsync(completedTaskUri, completedTaskId);
+            });
         }
     }
 }

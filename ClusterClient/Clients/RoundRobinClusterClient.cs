@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -41,11 +40,11 @@ namespace ClusterClient.Clients
                 .Concat(UriStatistics
                     .OrderByDescending(x => x.Value)
                     .Select(x => x.Key));
-            
+
             foreach (var uri in replicas)
             {
                 var sw = Stopwatch.StartNew();
-                
+
                 var (successes, value) = await ProcessSingleRequestAsync(
                     uri + "?query=" + query, timeout);
                 UriStatistics[uri] = sw.Elapsed;

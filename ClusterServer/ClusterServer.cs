@@ -61,9 +61,9 @@ namespace Cluster
         public void Stop()
         {
             if (Interlocked.CompareExchange(
-                    ref isRunning, 
-                    NotRunning, 
-                    Running) != Running) 
+                    ref isRunning,
+                    NotRunning,
+                    Running) != Running)
                 return;
             if (httpListener.IsListening)
                 httpListener.Stop();
@@ -104,13 +104,15 @@ namespace Cluster
                     return;
                 }
 
-                await Task.Delay(parsedOptions.MethodDuration);
                 var task = HandleQueryRequest(
                     context,
                     query,
                     currentRequestNum,
+                    parsedOptions.MethodDuration,
                     id);
+
                 handlingRequests.Add(id);
+
                 await task;
             };
         }
@@ -119,10 +121,15 @@ namespace Cluster
             HttpListenerContext context,
             string query,
             int currentRequestNum,
+            int methodDuration,
             Guid id)
         {
             log.InfoFormat("Thread #{0} received request '{1}' #{2} at {3}",
                 Thread.CurrentThread.ManagedThreadId, query, currentRequestNum, DateTime.Now.TimeOfDay);
+
+            var encryptedBytes = ClusterHelpers.GetBase64HashBytes(query);
+
+            await Task.Delay(methodDuration);
 
             if (canceledTasks.Contains(id))
             {
@@ -130,29 +137,25 @@ namespace Cluster
                     Thread.CurrentThread.ManagedThreadId, query, currentRequestNum,
                     DateTime.Now.TimeOfDay);
 
-                while (!handlingRequests.TryTake(out id))
-                    await Task.Delay(10);
-                while (!canceledTasks.TryTake(out id))
-                    await Task.Delay(10);
-            }
-            else
-            {
-                var encryptedBytes = ClusterHelpers.GetBase64HashBytes(query);
-                await context
-                    .Response
-                    .OutputStream
-                    .WriteAsync(
-                        encryptedBytes,
-                        0,
-                        encryptedBytes.Length);
+                handlingRequests.TryTake(out id);
+                canceledTasks.TryTake(out id);
 
-                log.InfoFormat("Thread #{0} sent response '{1}' #{2} at {3}",
-                    Thread.CurrentThread.ManagedThreadId, query, currentRequestNum,
-                    DateTime.Now.TimeOfDay);
-
-                while (!handlingRequests.TryTake(out id))
-                    await Task.Delay(10);
+                return;
             }
+
+            await context
+                .Response
+                .OutputStream
+                .WriteAsync(
+                    encryptedBytes,
+                    0,
+                    encryptedBytes.Length);
+
+            log.InfoFormat("Thread #{0} sent response '{1}' #{2} at {3}",
+                Thread.CurrentThread.ManagedThreadId, query, currentRequestNum,
+                DateTime.Now.TimeOfDay);
+
+            handlingRequests.TryTake(out id);
         }
     }
 }
