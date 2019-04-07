@@ -1,70 +1,79 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using log4net;
 
 namespace Cluster
 {
-	public class ClusterServer
+    public class ClusterServer
     {
-        private readonly ConcurrentDictionary<int, (bool Alive, Task Task, int Id)> handlingRequests 
-            = new ConcurrentDictionary<int, (bool, Task, int)>();
+        private const int Running = 1;
+        private const int NotRunning = 0;
 
-        private ConcurrentBag<int> CanceledTasks = new ConcurrentBag<int>();
-        
+        private readonly ConcurrentBag<Guid> canceledTasks = new ConcurrentBag<Guid>();
+        private readonly ConcurrentBag<Guid> handlingRequests = new ConcurrentBag<Guid>();
+
+        private readonly ILog log;
+        private HttpListener httpListener;
+
+        private int isRunning = NotRunning;
+        private int requestsCount;
+
         public ClusterServer(ServerOptions serverOptions, ILog log)
         {
-            this.ServerOptions = serverOptions;
+            ServerOptions = serverOptions;
             this.log = log;
         }
 
+        public ServerOptions ServerOptions { get; }
+
         public void Start()
         {
-            if (Interlocked.CompareExchange(ref isRunning, Running, NotRunning) == NotRunning)
+            if (Interlocked.CompareExchange(
+                    ref isRunning,
+                    Running,
+                    NotRunning) != NotRunning)
+                return;
+            httpListener = new HttpListener
             {
-                httpListener = new HttpListener
+                Prefixes =
                 {
-                    Prefixes =
-                    {
-                        $"http://+:{ServerOptions.Port}/{ServerOptions.MethodName}/"
-                    }
-                };
-
-                log.InfoFormat($"Server is starting listening prefixes: {string.Join(";", httpListener.Prefixes)}");
-
-                if (ServerOptions.Async)
-                {
-                    log.InfoFormat("Press ENTER to stop listening");
-                    httpListener.StartProcessingRequestsAsync(CreateAsyncCallback(ServerOptions));
+                    $"http://+:{ServerOptions.Port}/{ServerOptions.MethodName}/"
                 }
-                else
-                    httpListener.StartProcessingRequestsSync(CreateSyncCallback(ServerOptions));
+            };
+
+            log.InfoFormat($"Server is starting listening prefixes: {string.Join(";", httpListener.Prefixes)}");
+
+            if (ServerOptions.Async)
+            {
+                log.InfoFormat("Press ENTER to stop listening");
+                httpListener.StartProcessingRequestsAsync(CreateAsyncCallback(ServerOptions));
+            }
+            else
+            {
+                httpListener.StartProcessingRequestsSync(CreateSyncCallback(ServerOptions));
             }
         }
 
         public void Stop()
         {
-            if (Interlocked.CompareExchange(ref isRunning, NotRunning, Running) == Running)
-            {
-				if (httpListener.IsListening)
-					httpListener.Stop();
-            }
+            if (Interlocked.CompareExchange(
+                    ref isRunning, 
+                    NotRunning, 
+                    Running) != Running) 
+                return;
+            if (httpListener.IsListening)
+                httpListener.Stop();
         }
-
-        public ServerOptions ServerOptions { get; }
 
         private Action<HttpListenerContext> CreateSyncCallback(ServerOptions parsedOptions)
         {
             return context =>
             {
-                var currentRequestId = Interlocked.Increment(ref RequestsCount);
+                var currentRequestId = Interlocked.Increment(ref requestsCount);
                 log.InfoFormat("Thread #{0} received request #{1} at {2}",
                     Thread.CurrentThread.ManagedThreadId, currentRequestId, DateTime.Now.TimeOfDay);
 
@@ -83,77 +92,67 @@ namespace Cluster
         {
             return async context =>
             {
-                var currentRequestNum = Interlocked.Increment(ref RequestsCount);
-                var id = int.Parse(context.Request.Headers["id"]);
-                
-                if (context.Request.Headers.AllKeys.Contains("kill") &&
-                    context.Request.Headers["kill"] == "true")
-                {
-                    foreach (var handlingRequest in handlingRequests)
-                    {
-                        if (handlingRequest.Value.Id == id)
-                            CanceledTasks.Add(id);
-                    }
-                }
-                    
+                var currentRequestNum = Interlocked.Increment(ref requestsCount);
+                var id = Guid.Parse(context.Request.Headers["id"]);
                 var query = context.Request.QueryString["query"];
+
+                if (context.Request.Headers.AllKeys.Contains("kill") &&
+                    context.Request.Headers["kill"] == "true" &&
+                    handlingRequests.Contains(id))
+                {
+                    canceledTasks.Add(id);
+                    return;
+                }
+
+                await Task.Delay(parsedOptions.MethodDuration);
                 var task = HandleQueryRequest(
-                    context, 
-                    query, 
-                    currentRequestNum, 
-                    parsedOptions.MethodDuration,
+                    context,
+                    query,
+                    currentRequestNum,
                     id);
-                handlingRequests[currentRequestNum] = (true, task, id);
-                
+                handlingRequests.Add(id);
                 await task;
             };
         }
 
         private async Task HandleQueryRequest(
-            HttpListenerContext context, 
-            string query, 
-            int currentRequestNum, 
-            int delay,
-            int id)
+            HttpListenerContext context,
+            string query,
+            int currentRequestNum,
+            Guid id)
         {
             log.InfoFormat("Thread #{0} received request '{1}' #{2} at {3}",
                 Thread.CurrentThread.ManagedThreadId, query, currentRequestNum, DateTime.Now.TimeOfDay);
-            
-            await Task.Delay(delay);
-            
-            var encryptedBytes = ClusterHelpers.GetBase64HashBytes(query);
-            
-            if (CanceledTasks.Contains(id))
+
+            if (canceledTasks.Contains(id))
             {
-                while (!handlingRequests.TryRemove(currentRequestNum, out var task))
-                    await Task.Delay(10);
                 log.InfoFormat("Thread #{0} canceled '{1}' #{2} at {3}",
                     Thread.CurrentThread.ManagedThreadId, query, currentRequestNum,
                     DateTime.Now.TimeOfDay);
-                return;
+
+                while (!handlingRequests.TryTake(out id))
+                    await Task.Delay(10);
+                while (!canceledTasks.TryTake(out id))
+                    await Task.Delay(10);
             }
-            
-            await context.Response.OutputStream.WriteAsync(encryptedBytes, 0, encryptedBytes.Length);
-            
-            log.InfoFormat("Thread #{0} sent response '{1}' #{2} at {3}",
-                Thread.CurrentThread.ManagedThreadId, query, currentRequestNum,
-                DateTime.Now.TimeOfDay);
+            else
+            {
+                var encryptedBytes = ClusterHelpers.GetBase64HashBytes(query);
+                await context
+                    .Response
+                    .OutputStream
+                    .WriteAsync(
+                        encryptedBytes,
+                        0,
+                        encryptedBytes.Length);
 
-            while (!handlingRequests.TryRemove(currentRequestNum, out var task))
-                await Task.Delay(10);
+                log.InfoFormat("Thread #{0} sent response '{1}' #{2} at {3}",
+                    Thread.CurrentThread.ManagedThreadId, query, currentRequestNum,
+                    DateTime.Now.TimeOfDay);
+
+                while (!handlingRequests.TryTake(out id))
+                    await Task.Delay(10);
+            }
         }
-
-     
-
-
-        private int RequestsCount;
-
-        private int isRunning = NotRunning;
-
-        private const int Running = 1;
-        private const int NotRunning = 0;
-
-        private readonly ILog log;
-        private HttpListener httpListener;
     }
 }

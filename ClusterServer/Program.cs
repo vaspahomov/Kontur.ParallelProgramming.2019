@@ -19,7 +19,7 @@ namespace Cluster
 			{
 			    if(!ServerOptions.TryGetArguments(args, out var parsedArguments))
 					return;
-
+			    
                 var server = new ClusterServer(parsedArguments, Log);
                 server.Start();
 
